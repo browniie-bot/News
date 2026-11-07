@@ -58,7 +58,7 @@ class AIProvider(str, Enum):
 # Default models and API key env vars for each provider
 AI_PROVIDER_DEFAULTS = {
     AIProvider.ANTHROPIC: {
-        "model": "claude-3-5-sonnet-20241022",
+        "model": "claude-sonnet-5-5",
         "api_key_env": "ANTHROPIC_API_KEY",
     },
     AIProvider.OPENAI: {

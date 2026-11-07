@@ -5,7 +5,7 @@ import re
 from abc import ABC, abstractmethod
 from typing import Any, Dict, List, Optional
 from openai import AsyncAzureOpenAI, AsyncOpenAI
-from anthropic import AsyncAnthropic
+from anthropic import AsyncAnthropic, types as anthropic_types
 from google import genai
 from google.genai import types
 
@@ -124,7 +124,7 @@ class AnthropicClient(AIClient):
 
         api_key = _resolve_api_key(config)
 
-        kwargs = {"api_key": api_key}
+        kwargs: Dict[str, Any] = {"api_key": api_key}
         if config.base_url:
             kwargs["base_url"] = config.base_url
 
@@ -145,7 +145,7 @@ class AnthropicClient(AIClient):
         Args:
             system: System prompt
             user: User prompt
-            temperature: Sampling temperature
+            temperature: Ignored (messages.create no longer accepts it)
             max_tokens: Maximum tokens to generate
 
         Returns:
@@ -157,7 +157,7 @@ class AnthropicClient(AIClient):
         message = await self.client.messages.create(
             model=self.model,
             max_tokens=max_tokens,
-            temperature=temperature,
+            # `temperature` was removed from messages.create in anthropic 2.x
             system=system,
             messages=[{"role": "user", "content": user}]
         )
@@ -168,7 +168,7 @@ class AnthropicClient(AIClient):
                 input_tokens=getattr(usage, "input_tokens", 0),
                 output_tokens=getattr(usage, "output_tokens", 0),
             )
-        return message.content[0].text
+        return _first_text_block(message)
 
 
 class OpenAIClient(AIClient):
@@ -208,7 +208,7 @@ class OpenAIClient(AIClient):
         fallback = "no_key" if config.provider == AIProvider.OLLAMA else None
         api_key = _resolve_api_key(config, fallback=fallback)
 
-        kwargs = {"api_key": api_key}
+        kwargs: Dict[str, Any] = {"api_key": api_key}
         base_url = self._resolve_base_url(config)
         if base_url:
             kwargs["base_url"] = base_url
@@ -651,3 +651,13 @@ def create_ai_client(config: AIConfig) -> AIClient:
     if config.provider_chain:
         return _create_chained_client(config)
     return _create_single_client(config)
+
+
+def _first_text_block(message: anthropic_types.Message) -> str:
+    """Return the first text block; replies may start with a thinking block."""
+    for block in message.content:
+        if isinstance(block, anthropic_types.TextBlock):
+            return block.text
+    raise ValueError(
+        f"No text content in Anthropic response (stop_reason={message.stop_reason})"
+    )
